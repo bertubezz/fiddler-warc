@@ -11,59 +11,110 @@ namespace Fiddler.Importer.WARC
     [ProfferFormat("WARC", "Web Archive https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.0/")]
     public class FiddleInterface : ISessionImporter
     {
-
-        public Session[] ImportSessions(string sImportFormat, Dictionary<string, object> dictOptions, EventHandler<ProgressCallbackEventArgs> evtProgressNotifications)
+        public Session[] ImportSessions(string sImportFormat, Dictionary<string, object> dictOptions,
+            EventHandler<ProgressCallbackEventArgs> evtProgressNotifications)
         {
             try
             {
                 if (sImportFormat != "WARC")
+                    throw new ArgumentException("Invalid import format");
+
+                string filename = null, content = null;
+                // filename = @"X:\stuff\fiddler-warc\samples\logfile.csv";
+
+                if (dictOptions != null)
                 {
-                    Debug.Assert(false);
-                    return null;
+                    if (dictOptions.ContainsKey("Filename"))
+                        filename = dictOptions["Filename"] as string;
+                    else if (dictOptions.ContainsKey("Content"))
+                        content = dictOptions["Content"] as string;
                 }
 
-                string filename = dictOptions != null && dictOptions.ContainsKey("Filename") ?
-                    dictOptions["Filename"] as string :
-                    null;
-
-                if (String.IsNullOrWhiteSpace(filename))
+                if (String.IsNullOrWhiteSpace(filename) && content == null)
                 {
                     var filter = "WARC file (*.warc)|*.warc|Text files (*.txt)|*.txt|Log files (*.log)|.log|All files (*.*)|*.*";
                     filter = "All files (*.*)|*.*";
-                    filename = Fiddler.Utilities.ObtainOpenFilename("Import " + sImportFormat, filter);
-
+                    filename = Fiddler.Utilities.ObtainOpenFilename("Import " + sImportFormat, filter);                    
                 }
 
-                if (String.IsNullOrWhiteSpace(filename))
-                    return null;
+                WARCParser warc;
+                if (!String.IsNullOrWhiteSpace(filename))
+                    warc = new WARCParser(new FileStream(filename, FileMode.Open));
+                else if (content != null)                    
+                    warc = new WARCParser(new MemoryStream(Encoding.UTF8.GetBytes(content)));
+                else
+                    throw new ArgumentException("Invalid options");
 
                 var sessions = new List<Session>();
-                using (var oFS = new StreamReader(filename))
+                using (warc)
                 {
-                    var request =
-                        "GET / HTTP/1.1\r\n" +
-                        "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n" +
-                        "Accept-Encoding: gzip,deflate\r\n" +
-                        "Host: example.com\r\n" +
-                        "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.21 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.21\r\n" +
-                        "Connection: Keep-alive\r\n\r\n";
-                    var response =
-                        "HTTP/1.1 200 OK\r\n" +
-                        "Server: nginx/1.4.1\r\n" +
-                        "Date: Tue, 17 Mar 1970 01:20:15 GMT\r\n" +
-                        "Content-Type: text/plain\r\n" +
-                        "Connection: keep-alive\r\n" +
-                        "Content-Length: 2\r\n\r\n" +
-                        "OK";
+                    WARCParser.Record prevRequest = null; 
+                    foreach (var record in warc.parse())
+                    {
+                        if (prevRequest == null)
+                        {
+                            if (record.Type == "request")
+                                prevRequest = record;
+                        }
+                        else
+                        {
+                            WARCParser.Record request = prevRequest;
+                            WARCParser.Record response = null;
+                            if (record.Type == "response")
+                                response = record;
 
-                    var session = new Session(Encoding.ASCII.GetBytes(request),
-                        Encoding.ASCII.GetBytes(response),
-                        SessionFlags.ImportedFromOtherTool);
+                            if (response == null)
+                            {
+                                var session = new Session(
+                                    request.Body,
+                                    null,
+                                    SessionFlags.ImportedFromOtherTool);
 
-                    session.Timers.ClientBeginRequest = new DateTime(2019, 8, 28, 1, 1, 1);
-                    session.Timers.ServerDoneResponse = new DateTime(2019, 8, 28, 2, 2, 2);
+                                session.Timers.ClientBeginRequest = request.Date;
 
-                    sessions.Add(session);
+                                sessions.Add(session);
+                            }
+                            else if (request.RecordID == response.ConcurrentTo)
+                            {
+                                if (!String.IsNullOrWhiteSpace(request.SentBy))
+                                {
+                                    var session = new Session(
+                                        request.Body,
+                                        response.Body,
+                                        SessionFlags.ImportedFromOtherTool);
+
+                                    session.Timers.ClientBeginRequest = request.Date;
+                                    session.Timers.ServerDoneResponse = response.Date;
+
+                                    sessions.Add(session);
+                                }
+                            }
+                            else
+                            {
+                                if (!String.IsNullOrWhiteSpace(request.SentBy))
+                                {
+                                    var requestSession = new Session(
+                                        request.Body,
+                                        null,
+                                        SessionFlags.ImportedFromOtherTool);
+
+                                    requestSession.Timers.ClientBeginRequest = request.Date;
+
+                                    sessions.Add(requestSession);
+                                }
+                                var responseSession = new Session(
+                                    null,
+                                    response.Body,
+                                    SessionFlags.ImportedFromOtherTool);
+
+                                responseSession.Timers.ServerDoneResponse = response.Date;
+
+                                sessions.Add(responseSession);
+                            }
+                            
+                            prevRequest = null;
+                        }
+                    }
                 }
 
                 return sessions.ToArray();
@@ -73,9 +124,6 @@ namespace Fiddler.Importer.WARC
                 FiddlerApplication.ReportException(ex, "Failed to import NetLog");
                 return null;
             }
-
-            return null;
-
         }
         public void Dispose()
         {   
