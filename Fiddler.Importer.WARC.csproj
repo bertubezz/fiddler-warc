@@ -41,6 +41,7 @@
   <ItemGroup>
     <Compile Include="FiddleInterface.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="WARCParser.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
