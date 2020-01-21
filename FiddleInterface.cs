@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Fiddler.Importer.WARC
 {
@@ -34,13 +31,13 @@ namespace Fiddler.Importer.WARC
                 {
                     var filter = "WARC file (*.warc)|*.warc|Text files (*.txt)|*.txt|Log files (*.log)|.log|All files (*.*)|*.*";
                     filter = "All files (*.*)|*.*";
-                    filename = Fiddler.Utilities.ObtainOpenFilename("Import " + sImportFormat, filter);                    
+                    filename = Fiddler.Utilities.ObtainOpenFilename("Import " + sImportFormat, filter);
                 }
 
                 WARCParser warc;
                 if (!String.IsNullOrWhiteSpace(filename))
                     warc = new WARCParser(new FileStream(filename, FileMode.Open));
-                else if (content != null)                    
+                else if (content != null)
                     warc = new WARCParser(new MemoryStream(Encoding.UTF8.GetBytes(content)));
                 else
                     throw new ArgumentException("Invalid options");
@@ -48,7 +45,7 @@ namespace Fiddler.Importer.WARC
                 var sessions = new List<Session>();
                 using (warc)
                 {
-                    WARCParser.Record prevRequest = null; 
+                    WARCParser.Record prevRequest = null;
                     foreach (var record in warc.parse())
                     {
                         if (prevRequest == null)
@@ -111,7 +108,7 @@ namespace Fiddler.Importer.WARC
 
                                 sessions.Add(responseSession);
                             }
-                            
+
                             prevRequest = null;
                         }
                     }
@@ -126,7 +123,7 @@ namespace Fiddler.Importer.WARC
             }
         }
         public void Dispose()
-        {   
+        {
         }
     }
 }

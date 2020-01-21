@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO.MemoryMappedFiles;
 
 namespace Fiddler.Importer.WARC
 {
@@ -11,19 +9,32 @@ namespace Fiddler.Importer.WARC
     {
         public WARCReader(Stream stream)
         {
-            this.stream = new BinaryReader(stream);
+            this.stream = stream;
+        }
+
+        public WARCReader()
+        {
+        }
+
+        ~WARCReader()
+        {
+            Dispose();
         }
 
         public void Dispose()
         {
-            stream.Dispose();
+            if (stream != null)
+                stream.Dispose();
         }
+
+        Stream stream = null;
+        public Stream Stream { get => stream; set => stream = value; }
 
         public bool EndOfStream
         {
             get
             {
-                return stream.BaseStream.Position == stream.BaseStream.Length;
+                return stream.Position == stream.Length;
             }
         }
 
@@ -31,71 +42,59 @@ namespace Fiddler.Importer.WARC
         {
             get
             {
-                if (buffer == null)
-                    return 0;
-
-                return stream.BaseStream.Position - buffer.Length + bufferPos;
+                return stream.Position;
             }
         }
 
         public string ReadLine()
         {
-            string line = string.Empty;            
-            while (!EndOfStream)
+            string line = string.Empty;
+
+            do
             {
-                if (buffer == null || bufferPos == buffer.Length)
-                {
-                    buffer = stream.ReadBytes(4096);
-                    bufferPos = 0;
-                }
+                var c = stream.ReadByte();
 
-                while (bufferPos < buffer.Length)
-                {
-                    var b = (char)buffer[bufferPos++];
+                if (c == '\n')
+                    return line;
 
-                    if (b == '\n')
-                        return line;
+                if (c != '\r')
+                    line += (char)c;
 
-                    if (b != '\r')
-                        line += b;
-                }
-            }
-            
+
+            } while (!EndOfStream);
+
             return line;
         }
 
         public byte[] ReadBytes(int count)
         {
-            count = (int)Math.Min((long)count,
-                stream.BaseStream.Length - stream.BaseStream.Position);
-            
             var result = new byte[count];
-
-            var bufferSize = buffer.Length - bufferPos;
-            if (count < bufferSize)
-            {
-                Array.Copy(buffer, bufferPos, result, 0, count);
-                bufferPos += count;
-            }
-            else if (bufferSize > 0)
-            {
-                Array.Copy(buffer, bufferPos, result, 0, bufferSize);
-                bufferPos += bufferSize;
-
-                stream.Read(result, bufferSize, count - bufferSize);
-            }
-            else
-            {
-                stream.Read(result, 0, count);
-            }
-
+            stream.Read(result, 0, count);
             return result;
         }
+    }
 
-        BinaryReader stream;
+    class WARCFileReader : WARCReader, IDisposable
+    {
+        public WARCFileReader(FileStream fileStream)
+        {
+            mmf = MemoryMappedFile.CreateFromFile(fileStream, null, 0,
+                MemoryMappedFileAccess.Read, HandleInheritability.None, false);
+            Stream = mmf.CreateViewStream(0, 0, MemoryMappedFileAccess.Read);
+        }
 
-        byte[] buffer = null;
-        int bufferPos = 0;
+        ~WARCFileReader()
+        {
+            Dispose();
+        }
+
+        public new void Dispose()
+        {
+            base.Dispose();
+            mmf.Dispose();
+        }
+
+        MemoryMappedFile mmf;
     }
 
     public class WARCParser : IDisposable
@@ -177,7 +176,12 @@ namespace Fiddler.Importer.WARC
             }
         }
 
-        public WARCParser(Stream s)
+        public WARCParser(FileStream s)
+        {
+            stream = new WARCFileReader(s);
+        }
+
+        public WARCParser(MemoryStream s)
         {
             stream = new WARCReader(s);
         }

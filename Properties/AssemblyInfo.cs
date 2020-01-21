@@ -10,4 +10,4 @@ using System.Runtime.InteropServices;
 [assembly: System.Resources.NeutralResourcesLanguage("en-US")]
 [assembly: Fiddler.RequiredVersion("4.6.0.0")]
 
-[assembly: AssemblyVersion("0.0.1.0")]
+[assembly: AssemblyVersion("0.0.2.0")]
