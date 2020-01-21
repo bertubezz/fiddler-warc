@@ -32,7 +32,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Fiddler">
-      <HintPath>C:\Users\bertu\AppData\Local\Programs\Fiddler\Fiddler.exe</HintPath>
+      <HintPath>3rdparty\Fiddler.exe</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -44,11 +44,4 @@
     <Compile Include="WARCParser.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PostBuildEvent>copy /Y $(TargetPath) Z:\Documents\Fiddler2\ImportExport</PostBuildEvent>
-  </PropertyGroup>
 </Project>
